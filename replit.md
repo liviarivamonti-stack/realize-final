@@ -1,4 +1,4 @@
-# LoanCRM
+# REALIZE CRM
 
 A mobile-first PWA loan CRM for managing clients, installments, collections, commissions, and team rankings.
 

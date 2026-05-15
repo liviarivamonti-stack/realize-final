@@ -43,7 +43,7 @@ export default function Login() {
           <Wallet className="h-8 w-8 text-primary-foreground" />
         </div>
         <h2 className="text-center text-2xl font-bold leading-9 tracking-tight text-foreground">
-          Acessar LoanCRM
+          Acessar REALIZE CRM
         </h2>
       </div>
 
