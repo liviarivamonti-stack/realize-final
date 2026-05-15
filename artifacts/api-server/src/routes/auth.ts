@@ -63,10 +63,14 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
+  const papelValido = ["vendedor", "cobrador", "lider"].includes(req.body?.papel ?? "")
+    ? req.body.papel
+    : "vendedor";
+
   const senhaHash = hashPassword(senha);
   const [user] = await db
     .insert(usersTable)
-    .values({ nome, email, senhaHash, papel: "vendedor" })
+    .values({ nome, email, senhaHash, papel: papelValido })
     .returning();
 
   const token = await createSession(user.id);

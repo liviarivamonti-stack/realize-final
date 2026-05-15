@@ -8,19 +8,28 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Wallet, Eye, EyeOff, UserPlus, LogIn } from "lucide-react";
 
+type Papel = "vendedor" | "cobrador" | "lider";
+
+const papelOpcoes: { value: Papel; label: string; descricao: string }[] = [
+  { value: "vendedor", label: "Vendedor", descricao: "Gerencia clientes e contratos" },
+  { value: "cobrador", label: "Cobrador", descricao: "Gerencia pagamentos e cobrança" },
+  { value: "lider", label: "Líder", descricao: "Acesso completo ao sistema" },
+];
+
 export default function Login() {
   const [mode, setMode] = useState<"login" | "register">("login");
 
-  // Login state
+  // login
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [showSenha, setShowSenha] = useState(false);
 
-  // Register state
+  // register
   const [regNome, setRegNome] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regSenha, setRegSenha] = useState("");
   const [regSenhaConfirm, setRegSenhaConfirm] = useState("");
+  const [regPapel, setRegPapel] = useState<Papel>("vendedor");
   const [showRegSenha, setShowRegSenha] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
 
@@ -37,7 +46,7 @@ export default function Login() {
       onError: () => {
         toast({
           title: "Erro no login",
-          description: "Email ou senha inválidos. Tente novamente.",
+          description: "Email ou senha inválidos. Verifique e tente novamente.",
           variant: "destructive",
         });
       },
@@ -52,8 +61,12 @@ export default function Login() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!regNome.trim()) {
+    if (!regNome.trim() || regNome.trim().length < 2) {
       toast({ title: "Informe seu nome completo", variant: "destructive" });
+      return;
+    }
+    if (!regEmail.includes("@")) {
+      toast({ title: "Email inválido", variant: "destructive" });
       return;
     }
     if (regSenha.length < 6) {
@@ -71,7 +84,7 @@ export default function Login() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ nome: regNome, email: regEmail, senha: regSenha }),
+        body: JSON.stringify({ nome: regNome.trim(), email: regEmail, senha: regSenha, papel: regPapel }),
       });
 
       const data = await res.json();
@@ -85,32 +98,30 @@ export default function Login() {
         return;
       }
 
-      toast({ title: "Conta criada!", description: `Bem-vindo(a), ${data.user.nome}!` });
+      toast({ title: "Conta criada com sucesso!", description: `Bem-vindo(a), ${data.user.nome}!` });
       checkAuth();
       setLocation("/");
     } catch {
-      toast({ title: "Erro de conexão", description: "Verifique sua internet.", variant: "destructive" });
+      toast({ title: "Erro de conexão. Verifique sua internet.", variant: "destructive" });
     } finally {
       setIsRegistering(false);
     }
   };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col justify-center px-6 py-12 bg-background">
+    <div className="flex min-h-[100dvh] flex-col justify-center px-6 py-10 bg-background">
       <div className="sm:mx-auto sm:w-full sm:max-w-sm flex flex-col items-center">
-        <div className="h-16 w-16 bg-primary rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-primary/20">
+        <div className="h-16 w-16 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
           <Wallet className="h-8 w-8 text-primary-foreground" />
         </div>
-        <h2 className="text-center text-2xl font-bold tracking-tight text-foreground">
-          REALIZE CRM
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground text-center">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">REALIZE CRM</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           {mode === "login" ? "Acesse sua conta" : "Crie sua conta"}
         </p>
       </div>
 
-      {/* Tab switcher */}
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-sm">
+        {/* Tab switcher */}
         <div className="flex rounded-xl border bg-muted p-1 mb-6">
           <button
             type="button"
@@ -138,7 +149,7 @@ export default function Login() {
           </button>
         </div>
 
-        {/* LOGIN FORM */}
+        {/* LOGIN */}
         {mode === "login" && (
           <form className="space-y-4" onSubmit={handleLogin}>
             <div className="space-y-1.5">
@@ -178,13 +189,13 @@ export default function Login() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full mt-2" disabled={loginMutation.isPending}>
+            <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
               {loginMutation.isPending ? "Entrando..." : "Entrar"}
             </Button>
           </form>
         )}
 
-        {/* REGISTER FORM */}
+        {/* REGISTER */}
         {mode === "register" && (
           <form className="space-y-4" onSubmit={handleRegister}>
             <div className="space-y-1.5">
@@ -239,9 +250,9 @@ export default function Login() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="reg-senha-confirm">Confirmar senha</Label>
+              <Label htmlFor="reg-confirmar">Confirmar senha</Label>
               <Input
-                id="reg-senha-confirm"
+                id="reg-confirmar"
                 type={showRegSenha ? "text" : "password"}
                 autoComplete="new-password"
                 required
@@ -251,13 +262,40 @@ export default function Login() {
               />
             </div>
 
-            <Button type="submit" className="w-full mt-2" disabled={isRegistering}>
+            {/* Papel / Role selector */}
+            <div className="space-y-2">
+              <Label>Perfil de acesso</Label>
+              <div className="grid gap-2">
+                {papelOpcoes.map((op) => (
+                  <button
+                    key={op.value}
+                    type="button"
+                    onClick={() => setRegPapel(op.value)}
+                    className={`flex items-start gap-3 rounded-xl border-2 p-3 text-left transition-all ${
+                      regPapel === op.value
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/40 bg-transparent"
+                    }`}
+                  >
+                    <div className={`mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                      regPapel === op.value ? "border-primary" : "border-muted-foreground"
+                    }`}>
+                      {regPapel === op.value && (
+                        <div className="h-2 w-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{op.label}</p>
+                      <p className="text-xs text-muted-foreground">{op.descricao}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isRegistering}>
               {isRegistering ? "Criando conta..." : "Criar conta"}
             </Button>
-
-            <p className="text-xs text-center text-muted-foreground pt-1">
-              Sua conta será criada como <strong>Vendedor</strong>. O administrador pode alterar seu perfil depois.
-            </p>
           </form>
         )}
       </div>

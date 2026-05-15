@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,44 +16,92 @@ import Cobranca from "@/pages/cobranca";
 import Metas from "@/pages/metas";
 import Perfil from "@/pages/perfil";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
+});
 
-function ProtectedRoute({ component: Component, ...rest }: any) {
+// Spinner while auth loads
+function LoadingScreen() {
+  return (
+    <div className="flex h-[100dvh] items-center justify-center bg-background">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    </div>
+  );
+}
+
+// Guard: must be logged in
+function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <LoadingScreen />;
+  if (!isAuthenticated) return <Redirect to="/login" />;
+  return <>{children}</>;
+}
 
-  if (isLoading) {
-    return (
-      <div className="flex h-[100dvh] items-center justify-center bg-background">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
-  }
+// Guard: vendedor cannot access cobrança
+function RequireLiderOrCobrador({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user && user.papel === "vendedor") return <Redirect to="/" />;
+  return <>{children}</>;
+}
 
-  if (!isAuthenticated) {
-    return <Redirect to="/login" />;
-  }
-
-  return <Component {...rest} />;
+// Guard: cobrador cannot access clientes
+function RequireLiderOrVendedor({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user && user.papel === "cobrador") return <Redirect to="/" />;
+  return <>{children}</>;
 }
 
 function AppRouter() {
+  const { isLoading } = useAuth();
+  if (isLoading) return <LoadingScreen />;
+
   return (
     <Switch>
       <Route path="/login" component={Login} />
-      
-      <Route path="/">
-        <Layout>
-          <Switch>
-            <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
-            <Route path="/clientes" component={() => <ProtectedRoute component={Clientes} />} />
-            <Route path="/clientes/novo" component={() => <ProtectedRoute component={ClienteNovo} />} />
-            <Route path="/clientes/:id" component={(params) => <ProtectedRoute component={ClienteDetail} params={params} />} />
-            <Route path="/cobranca" component={() => <ProtectedRoute component={Cobranca} />} />
-            <Route path="/metas" component={() => <ProtectedRoute component={Metas} />} />
-            <Route path="/perfil" component={() => <ProtectedRoute component={Perfil} />} />
-            <Route component={NotFound} />
-          </Switch>
-        </Layout>
+
+      {/* All protected routes share the Layout (bottom nav) */}
+      <Route>
+        <RequireAuth>
+          <Layout>
+            <Switch>
+              <Route path="/" component={Dashboard} />
+
+              {/* Clientes – Líder e Vendedor */}
+              <Route path="/clientes">
+                <RequireLiderOrVendedor>
+                  <Clientes />
+                </RequireLiderOrVendedor>
+              </Route>
+              <Route path="/clientes/novo">
+                <RequireLiderOrVendedor>
+                  <ClienteNovo />
+                </RequireLiderOrVendedor>
+              </Route>
+              <Route path="/clientes/:id">
+                <RequireLiderOrVendedor>
+                  <ClienteDetail />
+                </RequireLiderOrVendedor>
+              </Route>
+
+              {/* Cobrança – Líder e Cobrador */}
+              <Route path="/cobranca">
+                <RequireLiderOrCobrador>
+                  <Cobranca />
+                </RequireLiderOrCobrador>
+              </Route>
+
+              {/* Metas / Ranking – Líder e Vendedor */}
+              <Route path="/metas">
+                <RequireLiderOrVendedor>
+                  <Metas />
+                </RequireLiderOrVendedor>
+              </Route>
+
+              <Route path="/perfil" component={Perfil} />
+              <Route component={NotFound} />
+            </Switch>
+          </Layout>
+        </RequireAuth>
       </Route>
     </Switch>
   );
@@ -62,7 +110,7 @@ function AppRouter() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="system" storageKey="loancrm-theme">
+      <ThemeProvider defaultTheme="system" storageKey="realize-crm-theme">
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <AuthProvider>
