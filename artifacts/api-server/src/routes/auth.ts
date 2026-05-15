@@ -41,6 +41,54 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   });
 });
 
+router.post("/auth/register", async (req, res): Promise<void> => {
+  const { nome, email, senha } = req.body ?? {};
+
+  if (!nome || typeof nome !== "string" || nome.trim().length < 2) {
+    res.status(400).json({ error: "Nome deve ter pelo menos 2 caracteres." });
+    return;
+  }
+  if (!email || typeof email !== "string" || !email.includes("@")) {
+    res.status(400).json({ error: "Email inválido." });
+    return;
+  }
+  if (!senha || typeof senha !== "string" || senha.length < 6) {
+    res.status(400).json({ error: "Senha deve ter pelo menos 6 caracteres." });
+    return;
+  }
+
+  const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
+  if (existing) {
+    res.status(409).json({ error: "Este email já está cadastrado." });
+    return;
+  }
+
+  const senhaHash = hashPassword(senha);
+  const [user] = await db
+    .insert(usersTable)
+    .values({ nome, email, senhaHash, papel: "vendedor" })
+    .returning();
+
+  const token = await createSession(user.id);
+
+  res.cookie("session_token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  res.status(201).json({
+    user: {
+      id: user.id,
+      nome: user.nome,
+      email: user.email,
+      papel: user.papel,
+      createdAt: user.createdAt.toISOString(),
+    },
+  });
+});
+
 router.post("/auth/logout", async (req, res): Promise<void> => {
   const token = req.cookies?.session_token;
   if (token) {
