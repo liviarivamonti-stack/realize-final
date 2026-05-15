@@ -3,20 +3,38 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Loan CRM API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: users
+    description: User management
+  - name: clients
+    description: Client management
+  - name: installments
+    description: Installment management
+  - name: events
+    description: Client event history
+  - name: tasks
+    description: Personal tasks
+  - name: notes
+    description: Private notes
+  - name: dashboard
+    description: Dashboard summaries and analytics
+  - name: ranking
+    description: Seller ranking and commissions
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +42,1098 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # AUTH
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email/password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current session
+      responses:
+        "200":
+          description: Logged out
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+
+  # USERS
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # CLIENTS
+  /clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List clients (filtered by role automatically)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ativo, em_cobranca, quitado]
+        - name: vendedor_id
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Client"
+    post:
+      operationId: createClient
+      tags: [clients]
+      summary: Create a client and auto-generate installments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientInput"
+      responses:
+        "201":
+          description: Client created with installments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+
+  /clients/{id}:
+    get:
+      operationId: getClient
+      tags: [clients]
+      summary: Get client with full details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Client details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateClient
+      tags: [clients]
+      summary: Update client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientUpdate"
+      responses:
+        "200":
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+
+  # INSTALLMENTS
+  /installments:
+    get:
+      operationId: listInstallments
+      tags: [installments]
+      summary: List installments with filters
+      parameters:
+        - name: client_id
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pendente, pago, atrasado]
+        - name: vendedor_id
+          in: query
+          schema:
+            type: integer
+        - name: overdue_only
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of installments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Installment"
+
+  /installments/{id}:
+    get:
+      operationId: getInstallment
+      tags: [installments]
+      summary: Get installment by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Installment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Installment"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateInstallment
+      tags: [installments]
+      summary: Update installment (mark as paid, update value, etc.)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstallmentUpdate"
+      responses:
+        "200":
+          description: Updated installment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Installment"
+
+  /installments/{id}/pay:
+    post:
+      operationId: payInstallment
+      tags: [installments]
+      summary: Mark installment as paid and create event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "200":
+          description: Payment registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Installment"
+
+  /clients/{id}/renovacao:
+    post:
+      operationId: renovacaoClient
+      tags: [installments]
+      summary: Generate new installments for renewal/agreement
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenovacaoInput"
+      responses:
+        "200":
+          description: Renewal registered with new installments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+
+  # CLIENT EVENTS
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List client events (global timeline)
+      parameters:
+        - name: client_id
+          in: query
+          schema:
+            type: integer
+        - name: tipo
+          in: query
+          schema:
+            type: string
+            enum: [venda_fechada, parcela_paga, atraso, renovacao, follow_up, anotacao]
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClientEvent"
+    post:
+      operationId: createEvent
+      tags: [events]
+      summary: Create a client event (follow_up, anotacao, etc.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "201":
+          description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientEvent"
+
+  # TASKS
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List tasks for current user
+      parameters:
+        - name: tipo
+          in: query
+          schema:
+            type: string
+            enum: [followup, lembrete, pessoal]
+        - name: concluido
+          in: query
+          schema:
+            type: boolean
+        - name: client_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}:
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Update a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      summary: Delete a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /tasks/{id}/complete:
+    post:
+      operationId: completeTask
+      tags: [tasks]
+      summary: Mark task as complete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  # PRIVATE NOTES
+  /notes:
+    get:
+      operationId: listNotes
+      tags: [notes]
+      summary: List private notes for current user
+      responses:
+        "200":
+          description: List of notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PrivateNote"
+    post:
+      operationId: createNote
+      tags: [notes]
+      summary: Create a private note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteInput"
+      responses:
+        "201":
+          description: Note created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivateNote"
+
+  /notes/{id}:
+    patch:
+      operationId: updateNote
+      tags: [notes]
+      summary: Update a private note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteUpdate"
+      responses:
+        "200":
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivateNote"
+    delete:
+      operationId: deleteNote
+      tags: [notes]
+      summary: Delete a private note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # DASHBOARD & RANKING
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary for current user (commission, bonus, recent sales)
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/cobranca:
+    get:
+      operationId: getCobrancaSummary
+      tags: [dashboard]
+      summary: Get collections summary (overdue counts, amounts)
+      responses:
+        "200":
+          description: Collections summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CobrancaSummary"
+
+  /ranking:
+    get:
+      operationId: getRanking
+      tags: [ranking]
+      summary: Get seller ranking with commissions and bonuses
+      parameters:
+        - name: mes
+          in: query
+          schema:
+            type: integer
+        - name: ano
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ranking list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RankingEntry"
+
+  /ranking/me:
+    get:
+      operationId: getMyRanking
+      tags: [ranking]
+      summary: Get current user's commission and ranking data
+      parameters:
+        - name: mes
+          in: query
+          schema:
+            type: integer
+        - name: ano
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: My ranking info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyRanking"
+
+  /cron/process-overdue:
+    post:
+      operationId: processOverdue
+      tags: [dashboard]
+      summary: Trigger overdue processing (cron job)
+      responses:
+        "200":
+          description: Processing result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CronResult"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    # AUTH
+    LoginInput:
+      type: object
+      required: [email, senha]
+      properties:
+        email:
+          type: string
+        senha:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+
+    # USERS
+    User:
+      type: object
+      required: [id, nome, email, papel]
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        email:
+          type: string
+        papel:
+          type: string
+          enum: [vendedor, cobrador, lider]
+        createdAt:
+          type: string
+
+    UserInput:
+      type: object
+      required: [nome, email, senha, papel]
+      properties:
+        nome:
+          type: string
+        email:
+          type: string
+        senha:
+          type: string
+        papel:
+          type: string
+          enum: [vendedor, cobrador, lider]
+
+    UserUpdate:
+      type: object
+      properties:
+        nome:
+          type: string
+        email:
+          type: string
+        papel:
+          type: string
+          enum: [vendedor, cobrador, lider]
+        senha:
+          type: string
+
+    # CLIENTS
+    Client:
+      type: object
+      required: [id, nome, telefone, vendedor_id, valor_contrato, parcelas, dia_vencimento, status]
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        telefone:
+          type: string
+        vendedor_id:
+          type: integer
+        vendedor_nome:
+          type: ["string", "null"]
+        valor_contrato:
+          type: number
+        parcelas:
+          type: integer
+        dia_vencimento:
+          type: integer
+        status:
+          type: string
+          enum: [ativo, em_cobranca, quitado]
+        createdAt:
+          type: string
+
+    ClientDetail:
+      type: object
+      required: [id, nome, telefone, vendedor_id, valor_contrato, parcelas, dia_vencimento, status, installments, events]
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        telefone:
+          type: string
+        vendedor_id:
+          type: integer
+        vendedor_nome:
+          type: ["string", "null"]
+        valor_contrato:
+          type: number
+        parcelas:
+          type: integer
+        dia_vencimento:
+          type: integer
+        status:
+          type: string
+          enum: [ativo, em_cobranca, quitado]
+        createdAt:
+          type: string
+        installments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Installment"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClientEvent"
+
+    ClientInput:
+      type: object
+      required: [nome, telefone, valor_contrato, parcelas, dia_vencimento]
+      properties:
+        nome:
+          type: string
+        telefone:
+          type: string
+        valor_contrato:
+          type: number
+        parcelas:
+          type: integer
+        dia_vencimento:
+          type: integer
+        vendedor_id:
+          type: ["integer", "null"]
+
+    ClientUpdate:
+      type: object
+      properties:
+        nome:
+          type: string
+        telefone:
+          type: string
+        status:
+          type: string
+          enum: [ativo, em_cobranca, quitado]
+        valor_contrato:
+          type: number
+
+    # INSTALLMENTS
+    Installment:
+      type: object
+      required: [id, client_id, numero_parcela, valor, vencimento, status]
+      properties:
+        id:
+          type: integer
+        client_id:
+          type: integer
+        client_nome:
+          type: ["string", "null"]
+        vendedor_id:
+          type: ["integer", "null"]
+        numero_parcela:
+          type: integer
+        valor:
+          type: number
+        vencimento:
+          type: string
+        status:
+          type: string
+          enum: [pendente, pago, atrasado]
+        pago_em:
+          type: ["string", "null"]
+
+    InstallmentUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pendente, pago, atrasado]
+        valor:
+          type: number
+        vencimento:
+          type: string
+
+    PaymentInput:
+      type: object
+      required: [valor_pago]
+      properties:
+        valor_pago:
+          type: number
+        observacao:
+          type: string
+
+    RenovacaoInput:
+      type: object
+      required: [novas_parcelas, novo_valor, novo_dia_vencimento]
+      properties:
+        novas_parcelas:
+          type: integer
+        novo_valor:
+          type: number
+        novo_dia_vencimento:
+          type: integer
+        observacao:
+          type: string
+
+    # EVENTS
+    ClientEvent:
+      type: object
+      required: [id, client_id, tipo, user_id, data]
+      properties:
+        id:
+          type: integer
+        client_id:
+          type: integer
+        client_nome:
+          type: ["string", "null"]
+        tipo:
+          type: string
+          enum: [venda_fechada, parcela_paga, atraso, renovacao, follow_up, anotacao]
+        user_id:
+          type: integer
+        user_nome:
+          type: ["string", "null"]
+        observacao:
+          type: ["string", "null"]
+        data:
+          type: string
+
+    EventInput:
+      type: object
+      required: [client_id, tipo]
+      properties:
+        client_id:
+          type: integer
+        tipo:
+          type: string
+          enum: [venda_fechada, parcela_paga, atraso, renovacao, follow_up, anotacao]
+        observacao:
+          type: string
+
+    # TASKS
+    Task:
+      type: object
+      required: [id, user_id, titulo, data, tipo, concluido]
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        client_id:
+          type: ["integer", "null"]
+        client_nome:
+          type: ["string", "null"]
+        titulo:
+          type: string
+        data:
+          type: string
+        tipo:
+          type: string
+          enum: [followup, lembrete, pessoal]
+        concluido:
+          type: boolean
+
+    TaskInput:
+      type: object
+      required: [titulo, data, tipo]
+      properties:
+        titulo:
+          type: string
+        data:
+          type: string
+        tipo:
+          type: string
+          enum: [followup, lembrete, pessoal]
+        client_id:
+          type: ["integer", "null"]
+
+    TaskUpdate:
+      type: object
+      properties:
+        titulo:
+          type: string
+        data:
+          type: string
+        tipo:
+          type: string
+          enum: [followup, lembrete, pessoal]
+        concluido:
+          type: boolean
+
+    # PRIVATE NOTES
+    PrivateNote:
+      type: object
+      required: [id, user_id, texto, createdAt]
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        texto:
+          type: string
+        createdAt:
+          type: string
+
+    NoteInput:
+      type: object
+      required: [texto]
+      properties:
+        texto:
+          type: string
+
+    NoteUpdate:
+      type: object
+      properties:
+        texto:
+          type: string
+
+    # DASHBOARD
+    DashboardSummary:
+      type: object
+      required: [comissao_mes, bonus, total_vendas_mes, clientes_ativos, parcelas_pagas_mes, parcelas_atrasadas, ranking_position, recent_events]
+      properties:
+        comissao_mes:
+          type: number
+        bonus:
+          type: number
+        total_vendas_mes:
+          type: number
+        clientes_ativos:
+          type: integer
+        parcelas_pagas_mes:
+          type: integer
+        parcelas_atrasadas:
+          type: integer
+        ranking_position:
+          type: integer
+        recent_events:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClientEvent"
+
+    CobrancaSummary:
+      type: object
+      required: [total_atrasados, valor_total_atrasado, atrasados_por_vendedor, installments_atrasadas]
+      properties:
+        total_atrasados:
+          type: integer
+        valor_total_atrasado:
+          type: number
+        atrasados_por_vendedor:
+          type: array
+          items:
+            $ref: "#/components/schemas/VendedorCobranca"
+        installments_atrasadas:
+          type: array
+          items:
+            $ref: "#/components/schemas/Installment"
+
+    VendedorCobranca:
+      type: object
+      required: [vendedor_id, vendedor_nome, total, valor]
+      properties:
+        vendedor_id:
+          type: integer
+        vendedor_nome:
+          type: string
+        total:
+          type: integer
+        valor:
+          type: number
+
+    # RANKING
+    RankingEntry:
+      type: object
+      required: [posicao, user_id, nome, papel, total_vendas, comissao, bonus, total_comissao]
+      properties:
+        posicao:
+          type: integer
+        user_id:
+          type: integer
+        nome:
+          type: string
+        papel:
+          type: string
+        total_vendas:
+          type: number
+        comissao:
+          type: number
+        bonus:
+          type: number
+        total_comissao:
+          type: number
+
+    MyRanking:
+      type: object
+      required: [posicao, total_vendas, comissao, bonus, total_comissao, meta_progress, mes, ano]
+      properties:
+        posicao:
+          type: integer
+        total_vendas:
+          type: number
+        comissao:
+          type: number
+        bonus:
+          type: number
+        total_comissao:
+          type: number
+        meta_progress:
+          type: number
+        mes:
+          type: integer
+        ano:
+          type: integer
+
+    CronResult:
+      type: object
+      required: [processed, updated_installments, events_created, tasks_created]
+      properties:
+        processed:
+          type: integer
+        updated_installments:
+          type: integer
+        events_created:
+          type: integer
+        tasks_created:
+          type: integer
