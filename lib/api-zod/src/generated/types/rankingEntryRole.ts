@@ -6,14 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * @nullable
- */
-export type UserPapel = typeof UserPapel[keyof typeof UserPapel] | null;
+export type RankingEntryRole = typeof RankingEntryRole[keyof typeof RankingEntryRole];
 
 
-export const UserPapel = {
+export const RankingEntryRole = {
   vendedor: 'vendedor',
-  cobrador: 'cobrador',
   lider: 'lider',
 } as const;

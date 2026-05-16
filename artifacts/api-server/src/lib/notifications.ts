@@ -1,11 +1,12 @@
-import { db, notificationsTable, usersTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { db, notificationsTable, teamMembersTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import type { Notification } from "@workspace/db";
 
 type NotifTipo = Notification["tipo"];
 
 export async function createNotification(params: {
   userId: number;
+  teamId: number;
   tipo: NotifTipo;
   titulo: string;
   mensagem: string;
@@ -13,6 +14,7 @@ export async function createNotification(params: {
 }) {
   await db.insert(notificationsTable).values({
     userId: params.userId,
+    teamId: params.teamId,
     tipo: params.tipo,
     titulo: params.titulo,
     mensagem: params.mensagem,
@@ -21,19 +23,29 @@ export async function createNotification(params: {
   });
 }
 
-export async function createNotificationForRoles(params: {
-  papeis: Array<"vendedor" | "cobrador" | "lider">;
+export async function createNotificationForTeamRoles(params: {
+  teamId: number;
+  roles: Array<"vendedor" | "cobrador" | "lider">;
   tipo: NotifTipo;
   titulo: string;
   mensagem: string;
   clientId?: number | null;
 }) {
-  const users = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(inArray(usersTable.papel, params.papeis));
+  const members = await db
+    .select({ userId: teamMembersTable.userId })
+    .from(teamMembersTable)
+    .where(eq(teamMembersTable.teamId, params.teamId));
 
-  for (const user of users) {
-    await createNotification({ ...params, userId: user.id });
+  const filtered = members.filter(m => params.roles.includes("vendedor" as any));
+
+  for (const m of members) {
+    await createNotification({
+      userId: m.userId,
+      teamId: params.teamId,
+      tipo: params.tipo,
+      titulo: params.titulo,
+      mensagem: params.mensagem,
+      clientId: params.clientId ?? null,
+    });
   }
 }

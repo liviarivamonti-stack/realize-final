@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode, useEffect, useState } from "react";
+import { createContext, useContext, ReactNode, useEffect } from "react";
 import { useGetMe, getGetMeQueryKey, User } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 
@@ -6,6 +6,9 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  needsTeam: boolean;
+  activeTeamId: number | null;
+  papel: string | null;
   checkAuth: () => void;
 }
 
@@ -20,11 +23,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   });
 
+  const needsTeam = user ? (user.needs_team ?? false) : false;
+  const activeTeamId = user?.active_team_id ?? null;
+  const papel = user?.papel ?? null;
+
   useEffect(() => {
-    if (!isLoading && isError && location !== "/login") {
+    if (isLoading) return;
+    if (isError && location !== "/login") {
       setLocation("/login");
     }
-  }, [isLoading, isError, location, setLocation]);
+    if (user && needsTeam && location !== "/seletor-time") {
+      setLocation("/seletor-time");
+    }
+  }, [isLoading, isError, user, needsTeam, location, setLocation]);
 
   return (
     <AuthContext.Provider
@@ -32,6 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user: user ?? null,
         isLoading,
         isAuthenticated: !!user,
+        needsTeam,
+        activeTeamId,
+        papel,
         checkAuth: () => refetch(),
       }}
     >

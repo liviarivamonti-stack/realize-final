@@ -8,6 +8,7 @@ export const taskTypeEnum = pgEnum("task_type", ["followup", "lembrete", "pessoa
 
 export const tasksTable = pgTable("tasks", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id").notNull(),
   userId: integer("user_id").notNull().references(() => usersTable.id),
   clientId: integer("client_id").references(() => clientsTable.id),
   titulo: text("titulo").notNull(),

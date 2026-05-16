@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, installmentsTable, clientsTable, clientEventsTable, usersTable } from "@workspace/db";
-import { eq, and, SQL, inArray } from "drizzle-orm";
-import { requireAuth, getCurrentUser } from "../lib/auth";
+import { db, installmentsTable, clientsTable, clientEventsTable, teamMembersTable } from "@workspace/db";
+import { eq, and, SQL } from "drizzle-orm";
+import { requireAuth, getCurrentUser, requireTeam, getCurrentTeamMember } from "../lib/auth";
 import {
   ListInstallmentsQueryParams,
   GetInstallmentParams,
@@ -29,19 +29,24 @@ function formatInstallment(i: any, clientNome?: string | null, vendedorId?: numb
 }
 
 router.get("/installments", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const qp = ListInstallmentsQueryParams.safeParse(req.query);
   const { client_id, status, vendedor_id, overdue_only } = qp.success ? qp.data : {};
 
   const currentUser = getCurrentUser(req);
+  const teamMember = getCurrentTeamMember(req);
 
   const rows = await db
     .select({ installment: installmentsTable, clientNome: clientsTable.nome, vendedorId: clientsTable.vendedorId })
     .from(installmentsTable)
     .leftJoin(clientsTable, eq(installmentsTable.clientId, clientsTable.id))
+    .where(eq(installmentsTable.teamId, teamId))
     .orderBy(installmentsTable.vencimento);
 
   let filtered = rows;
-  if (currentUser.papel === "vendedor") filtered = filtered.filter(r => r.vendedorId === currentUser.id);
+  if (teamMember?.role === "vendedor") filtered = filtered.filter(r => r.vendedorId === currentUser.id);
   else if (vendedor_id) filtered = filtered.filter(r => r.vendedorId === vendedor_id);
   if (client_id) filtered = filtered.filter(r => r.installment.clientId === client_id);
   if (status) filtered = filtered.filter(r => r.installment.status === status);
@@ -51,6 +56,9 @@ router.get("/installments", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/installments/:id", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = GetInstallmentParams.safeParse({ id: parseInt(raw) });
   if (!params.success) { res.status(400).json({ error: "Invalid ID" }); return; }
@@ -59,13 +67,16 @@ router.get("/installments/:id", requireAuth, async (req, res): Promise<void> => 
     .select({ installment: installmentsTable, clientNome: clientsTable.nome, vendedorId: clientsTable.vendedorId })
     .from(installmentsTable)
     .leftJoin(clientsTable, eq(installmentsTable.clientId, clientsTable.id))
-    .where(eq(installmentsTable.id, params.data.id));
+    .where(and(eq(installmentsTable.id, params.data.id), eq(installmentsTable.teamId, teamId)));
 
   if (!row) { res.status(404).json({ error: "Installment not found" }); return; }
   res.json(formatInstallment(row.installment, row.clientNome, row.vendedorId));
 });
 
 router.patch("/installments/:id", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = UpdateInstallmentParams.safeParse({ id: parseInt(raw) });
   if (!params.success) { res.status(400).json({ error: "Invalid ID" }); return; }
@@ -78,7 +89,7 @@ router.patch("/installments/:id", requireAuth, async (req, res): Promise<void> =
   if (parsed.data.valor !== undefined) updates.valor = String(parsed.data.valor);
   if (parsed.data.vencimento !== undefined) updates.vencimento = parsed.data.vencimento;
 
-  const [inst] = await db.update(installmentsTable).set(updates).where(eq(installmentsTable.id, params.data.id)).returning();
+  const [inst] = await db.update(installmentsTable).set(updates).where(and(eq(installmentsTable.id, params.data.id), eq(installmentsTable.teamId, teamId))).returning();
   if (!inst) { res.status(404).json({ error: "Installment not found" }); return; }
 
   const [row] = await db.select({ clientNome: clientsTable.nome, vendedorId: clientsTable.vendedorId }).from(clientsTable).where(eq(clientsTable.id, inst.clientId));
@@ -86,6 +97,9 @@ router.patch("/installments/:id", requireAuth, async (req, res): Promise<void> =
 });
 
 router.post("/installments/:id/pay", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = PayInstallmentParams.safeParse({ id: parseInt(raw) });
   if (!params.success) { res.status(400).json({ error: "Invalid ID" }); return; }
@@ -96,15 +110,13 @@ router.post("/installments/:id/pay", requireAuth, async (req, res): Promise<void
   const currentUser = getCurrentUser(req);
   const now = new Date();
 
-  const [inst] = await db.update(installmentsTable).set({ status: "pago", pagoEm: now }).where(eq(installmentsTable.id, params.data.id)).returning();
+  const [inst] = await db.update(installmentsTable).set({ status: "pago", pagoEm: now }).where(and(eq(installmentsTable.id, params.data.id), eq(installmentsTable.teamId, teamId))).returning();
   if (!inst) { res.status(404).json({ error: "Installment not found" }); return; }
 
-  const [clientRow] = await db
-    .select({ clientNome: clientsTable.nome, vendedorId: clientsTable.vendedorId })
-    .from(clientsTable)
-    .where(eq(clientsTable.id, inst.clientId));
+  const [clientRow] = await db.select({ clientNome: clientsTable.nome, vendedorId: clientsTable.vendedorId }).from(clientsTable).where(eq(clientsTable.id, inst.clientId));
 
   await db.insert(clientEventsTable).values({
+    teamId,
     clientId: inst.clientId,
     tipo: "parcela_paga",
     userId: currentUser.id,
@@ -112,16 +124,17 @@ router.post("/installments/:id/pay", requireAuth, async (req, res): Promise<void
     data: now,
   });
 
-  // Notify all cobradores and lideres
+  // Notify all cobradores and líderes in the team
   const recipients = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(inArray(usersTable.papel, ["cobrador", "lider"]));
+    .select({ userId: teamMembersTable.userId, role: teamMembersTable.role })
+    .from(teamMembersTable)
+    .where(eq(teamMembersTable.teamId, teamId));
 
   const valor = parseFloat(inst.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  for (const u of recipients) {
+  for (const u of recipients.filter(r => ["cobrador", "lider"].includes(r.role))) {
     await createNotification({
-      userId: u.id,
+      userId: u.userId,
+      teamId,
       tipo: "pagamento_confirmado",
       titulo: "Pagamento confirmado",
       mensagem: `${clientRow?.clientNome ?? "Cliente"} — parcela ${inst.numeroParcela} de ${valor} confirmada.`,

@@ -29,9 +29,16 @@ export const LoginResponse = zod.object({
   "id": zod.number(),
   "nome": zod.string(),
   "email": zod.string(),
-  "papel": zod.enum(['vendedor', 'cobrador', 'lider']),
+  "papel": zod.union([zod.literal('vendedor'),zod.literal('cobrador'),zod.literal('lider'),zod.literal(null)]).nullish(),
+  "active_team_id": zod.number().nullish(),
+  "active_team": zod.object({
+
+}).passthrough().nullish(),
+  "needs_team": zod.boolean().optional(),
   "createdAt": zod.string().optional()
-})
+}),
+  "active_team_id": zod.number().nullish(),
+  "needs_team": zod.boolean().optional()
 })
 
 
@@ -42,8 +49,121 @@ export const GetMeResponse = zod.object({
   "id": zod.number(),
   "nome": zod.string(),
   "email": zod.string(),
-  "papel": zod.enum(['vendedor', 'cobrador', 'lider']),
+  "papel": zod.union([zod.literal('vendedor'),zod.literal('cobrador'),zod.literal('lider'),zod.literal(null)]).nullish(),
+  "active_team_id": zod.number().nullish(),
+  "active_team": zod.object({
+
+}).passthrough().nullish(),
+  "needs_team": zod.boolean().optional(),
   "createdAt": zod.string().optional()
+})
+
+
+/**
+ * @summary List teams the current user belongs to
+ */
+export const ListTeamsResponse = zod.object({
+  "teams": zod.array(zod.object({
+  "id": zod.number(),
+  "nome": zod.string(),
+  "invite_code": zod.string(),
+  "meta_mensal": zod.number().optional(),
+  "created_by": zod.number().optional(),
+  "role": zod.union([zod.literal('vendedor'),zod.literal('cobrador'),zod.literal('lider'),zod.literal(null)]).nullish(),
+  "is_active": zod.boolean().optional(),
+  "created_at": zod.string().optional()
+})),
+  "active_team_id": zod.number().nullish()
+})
+
+
+/**
+ * @summary Create a new team
+ */
+export const CreateTeamBody = zod.object({
+  "nome": zod.string()
+})
+
+
+/**
+ * @summary Join a team by invite code
+ */
+export const JoinTeamBody = zod.object({
+  "invite_code": zod.string()
+})
+
+
+/**
+ * @summary Switch active team
+ */
+export const SwitchTeamBody = zod.object({
+  "team_id": zod.number()
+})
+
+export const SwitchTeamResponse = zod.object({
+  "id": zod.number(),
+  "nome": zod.string(),
+  "invite_code": zod.string(),
+  "meta_mensal": zod.number().optional(),
+  "created_by": zod.number().optional(),
+  "role": zod.union([zod.literal('vendedor'),zod.literal('cobrador'),zod.literal('lider'),zod.literal(null)]).nullish(),
+  "is_active": zod.boolean().optional(),
+  "created_at": zod.string().optional()
+})
+
+
+/**
+ * @summary List members of a team
+ */
+export const ListTeamMembersParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListTeamMembersResponseItem = zod.object({
+  "id": zod.number(),
+  "user_id": zod.number().nullable(),
+  "nome": zod.string().nullable(),
+  "email": zod.string().nullish(),
+  "role": zod.enum(['vendedor', 'cobrador', 'lider']),
+  "created_at": zod.string().nullish()
+})
+export const ListTeamMembersResponse = zod.array(ListTeamMembersResponseItem)
+
+
+/**
+ * @summary Update a team member's role (leader only)
+ */
+export const UpdateTeamMemberParams = zod.object({
+  "id": zod.coerce.number(),
+  "userId": zod.coerce.number()
+})
+
+export const UpdateTeamMemberBody = zod.object({
+  "role": zod.enum(['vendedor', 'cobrador', 'lider'])
+})
+
+
+/**
+ * @summary Update team settings (leader only)
+ */
+export const UpdateTeamParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateTeamBody = zod.object({
+  "nome": zod.string().optional(),
+  "meta_mensal": zod.number().optional()
+})
+
+export const UpdateTeamResponse = zod.object({
+  "id": zod.number(),
+  "nome": zod.string(),
+  "invite_code": zod.string(),
+  "meta_mensal": zod.number().optional(),
+  "created_by": zod.number().optional(),
+  "role": zod.union([zod.literal('vendedor'),zod.literal('cobrador'),zod.literal('lider'),zod.literal(null)]).nullish(),
+  "is_active": zod.boolean().optional(),
+  "created_at": zod.string().optional()
 })
 
 
@@ -54,7 +174,12 @@ export const ListUsersResponseItem = zod.object({
   "id": zod.number(),
   "nome": zod.string(),
   "email": zod.string(),
-  "papel": zod.enum(['vendedor', 'cobrador', 'lider']),
+  "papel": zod.union([zod.literal('vendedor'),zod.literal('cobrador'),zod.literal('lider'),zod.literal(null)]).nullish(),
+  "active_team_id": zod.number().nullish(),
+  "active_team": zod.object({
+
+}).passthrough().nullish(),
+  "needs_team": zod.boolean().optional(),
   "createdAt": zod.string().optional()
 })
 export const ListUsersResponse = zod.array(ListUsersResponseItem)
@@ -82,7 +207,12 @@ export const GetUserResponse = zod.object({
   "id": zod.number(),
   "nome": zod.string(),
   "email": zod.string(),
-  "papel": zod.enum(['vendedor', 'cobrador', 'lider']),
+  "papel": zod.union([zod.literal('vendedor'),zod.literal('cobrador'),zod.literal('lider'),zod.literal(null)]).nullish(),
+  "active_team_id": zod.number().nullish(),
+  "active_team": zod.object({
+
+}).passthrough().nullish(),
+  "needs_team": zod.boolean().optional(),
   "createdAt": zod.string().optional()
 })
 
@@ -105,7 +235,12 @@ export const UpdateUserResponse = zod.object({
   "id": zod.number(),
   "nome": zod.string(),
   "email": zod.string(),
-  "papel": zod.enum(['vendedor', 'cobrador', 'lider']),
+  "papel": zod.union([zod.literal('vendedor'),zod.literal('cobrador'),zod.literal('lider'),zod.literal(null)]).nullish(),
+  "active_team_id": zod.number().nullish(),
+  "active_team": zod.object({
+
+}).passthrough().nullish(),
+  "needs_team": zod.boolean().optional(),
   "createdAt": zod.string().optional()
 })
 
@@ -547,6 +682,15 @@ export const GetDashboardSummaryResponse = zod.object({
   "parcelas_pagas_mes": zod.number(),
   "parcelas_atrasadas": zod.number(),
   "ranking_position": zod.number(),
+  "podium": zod.array(zod.object({
+  "posicao": zod.number(),
+  "user_id": zod.number(),
+  "nome": zod.string(),
+  "total_vendas": zod.number(),
+  "comissao": zod.number(),
+  "bonus": zod.number(),
+  "total": zod.number()
+})).optional(),
   "recent_events": zod.array(zod.object({
   "id": zod.number(),
   "client_id": zod.number(),
@@ -605,7 +749,7 @@ export const GetRankingResponseItem = zod.object({
   "posicao": zod.number(),
   "user_id": zod.number(),
   "nome": zod.string(),
-  "papel": zod.string(),
+  "role": zod.enum(['vendedor', 'lider']),
   "total_vendas": zod.number(),
   "comissao": zod.number(),
   "bonus": zod.number(),

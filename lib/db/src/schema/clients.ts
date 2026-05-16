@@ -8,6 +8,7 @@ export const riskLevelEnum = pgEnum("risk_level", ["atencao", "risco", "critico"
 
 export const clientsTable = pgTable("clients", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id").notNull(),
   nome: text("nome").notNull(),
   telefone: text("telefone").notNull(),
   vendedorId: integer("vendedor_id").notNull().references(() => usersTable.id),

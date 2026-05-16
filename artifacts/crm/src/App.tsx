@@ -8,6 +8,7 @@ import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
 
 import Login from "@/pages/login";
+import SeletorTime from "@/pages/seletor-time";
 import Dashboard from "@/pages/dashboard";
 import Clientes from "@/pages/clientes";
 import ClienteNovo from "@/pages/cliente-novo";
@@ -21,7 +22,6 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 });
 
-// Spinner while auth loads
 function LoadingScreen() {
   return (
     <div className="flex h-[100dvh] items-center justify-center bg-background">
@@ -30,25 +30,23 @@ function LoadingScreen() {
   );
 }
 
-// Guard: must be logged in
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, needsTeam } = useAuth();
   if (isLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <Redirect to="/login" />;
+  if (needsTeam) return <Redirect to="/seletor-time" />;
   return <>{children}</>;
 }
 
-// Guard: vendedor cannot access cobrança
 function RequireLiderOrCobrador({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  if (user && user.papel === "vendedor") return <Redirect to="/" />;
+  const { papel } = useAuth();
+  if (papel === "vendedor") return <Redirect to="/" />;
   return <>{children}</>;
 }
 
-// Guard: cobrador cannot access clientes
 function RequireLiderOrVendedor({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  if (user && user.papel === "cobrador") return <Redirect to="/" />;
+  const { papel } = useAuth();
+  if (papel === "cobrador") return <Redirect to="/" />;
   return <>{children}</>;
 }
 
@@ -59,43 +57,30 @@ function AppRouter() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/seletor-time" component={SeletorTime} />
 
-      {/* All protected routes share the Layout (bottom nav) */}
       <Route>
         <RequireAuth>
           <Layout>
             <Switch>
               <Route path="/" component={Dashboard} />
 
-              {/* Clientes – Líder e Vendedor */}
               <Route path="/clientes">
-                <RequireLiderOrVendedor>
-                  <Clientes />
-                </RequireLiderOrVendedor>
+                <RequireLiderOrVendedor><Clientes /></RequireLiderOrVendedor>
               </Route>
               <Route path="/clientes/novo">
-                <RequireLiderOrVendedor>
-                  <ClienteNovo />
-                </RequireLiderOrVendedor>
+                <RequireLiderOrVendedor><ClienteNovo /></RequireLiderOrVendedor>
               </Route>
               <Route path="/clientes/:id">
-                <RequireLiderOrVendedor>
-                  <ClienteDetail />
-                </RequireLiderOrVendedor>
+                <RequireLiderOrVendedor><ClienteDetail /></RequireLiderOrVendedor>
               </Route>
 
-              {/* Cobrança – Líder e Cobrador */}
               <Route path="/cobranca">
-                <RequireLiderOrCobrador>
-                  <Cobranca />
-                </RequireLiderOrCobrador>
+                <RequireLiderOrCobrador><Cobranca /></RequireLiderOrCobrador>
               </Route>
 
-              {/* Metas / Ranking – Líder e Vendedor */}
               <Route path="/metas">
-                <RequireLiderOrVendedor>
-                  <Metas />
-                </RequireLiderOrVendedor>
+                <RequireLiderOrVendedor><Metas /></RequireLiderOrVendedor>
               </Route>
 
               <Route path="/perfil" component={Perfil} />

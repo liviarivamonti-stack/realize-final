@@ -7,6 +7,7 @@ export const installmentStatusEnum = pgEnum("installment_status", ["pendente", "
 
 export const installmentsTable = pgTable("installments", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id").notNull(),
   clientId: integer("client_id").notNull().references(() => clientsTable.id),
   numeroParcela: integer("numero_parcela").notNull(),
   valor: numeric("valor", { precision: 12, scale: 2 }).notNull(),

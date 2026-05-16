@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, tasksTable, clientsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { requireAuth, getCurrentUser } from "../lib/auth";
+import { requireAuth, getCurrentUser, requireTeam } from "../lib/auth";
 import {
   ListTasksQueryParams,
   CreateTaskBody,
@@ -27,6 +27,9 @@ function formatTask(t: any, clientNome?: string | null) {
 }
 
 router.get("/tasks", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const qp = ListTasksQueryParams.safeParse(req.query);
   const { tipo, concluido, client_id } = qp.success ? qp.data : {};
   const currentUser = getCurrentUser(req);
@@ -35,7 +38,7 @@ router.get("/tasks", requireAuth, async (req, res): Promise<void> => {
     .select({ task: tasksTable, clientNome: clientsTable.nome })
     .from(tasksTable)
     .leftJoin(clientsTable, eq(tasksTable.clientId, clientsTable.id))
-    .where(eq(tasksTable.userId, currentUser.id))
+    .where(and(eq(tasksTable.teamId, teamId), eq(tasksTable.userId, currentUser.id)))
     .orderBy(tasksTable.data);
 
   let filtered = rows;
@@ -47,6 +50,9 @@ router.get("/tasks", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/tasks", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const parsed = CreateTaskBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -55,6 +61,7 @@ router.post("/tasks", requireAuth, async (req, res): Promise<void> => {
 
   const currentUser = getCurrentUser(req);
   const [task] = await db.insert(tasksTable).values({
+    teamId,
     userId: currentUser.id,
     clientId: parsed.data.client_id ?? null,
     titulo: parsed.data.titulo,
@@ -73,18 +80,15 @@ router.post("/tasks", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/tasks/:id", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = UpdateTaskParams.safeParse({ id: parseInt(raw) });
-  if (!params.success) {
-    res.status(400).json({ error: "Invalid ID" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: "Invalid ID" }); return; }
 
   const parsed = UpdateTaskBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const currentUser = getCurrentUser(req);
   const updates: Record<string, unknown> = {};
@@ -96,65 +100,54 @@ router.patch("/tasks/:id", requireAuth, async (req, res): Promise<void> => {
   const [task] = await db
     .update(tasksTable)
     .set(updates)
-    .where(and(eq(tasksTable.id, params.data.id), eq(tasksTable.userId, currentUser.id)))
+    .where(and(eq(tasksTable.id, params.data.id), eq(tasksTable.userId, currentUser.id), eq(tasksTable.teamId, teamId)))
     .returning();
 
-  if (!task) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
+  if (!task) { res.status(404).json({ error: "Task not found" }); return; }
 
   let clientNome: string | null = null;
   if (task.clientId) {
     const [c] = await db.select().from(clientsTable).where(eq(clientsTable.id, task.clientId));
     clientNome = c?.nome ?? null;
   }
-
   res.json(formatTask(task, clientNome));
 });
 
 router.delete("/tasks/:id", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = DeleteTaskParams.safeParse({ id: parseInt(raw) });
-  if (!params.success) {
-    res.status(400).json({ error: "Invalid ID" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: "Invalid ID" }); return; }
 
   const currentUser = getCurrentUser(req);
-  await db
-    .delete(tasksTable)
-    .where(and(eq(tasksTable.id, params.data.id), eq(tasksTable.userId, currentUser.id)));
-
+  await db.delete(tasksTable).where(and(eq(tasksTable.id, params.data.id), eq(tasksTable.userId, currentUser.id), eq(tasksTable.teamId, teamId)));
   res.sendStatus(204);
 });
 
 router.post("/tasks/:id/complete", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = CompleteTaskParams.safeParse({ id: parseInt(raw) });
-  if (!params.success) {
-    res.status(400).json({ error: "Invalid ID" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: "Invalid ID" }); return; }
 
   const currentUser = getCurrentUser(req);
   const [task] = await db
     .update(tasksTable)
     .set({ concluido: true })
-    .where(and(eq(tasksTable.id, params.data.id), eq(tasksTable.userId, currentUser.id)))
+    .where(and(eq(tasksTable.id, params.data.id), eq(tasksTable.userId, currentUser.id), eq(tasksTable.teamId, teamId)))
     .returning();
 
-  if (!task) {
-    res.status(404).json({ error: "Task not found" });
-    return;
-  }
+  if (!task) { res.status(404).json({ error: "Task not found" }); return; }
 
   let clientNome: string | null = null;
   if (task.clientId) {
     const [c] = await db.select().from(clientsTable).where(eq(clientsTable.id, task.clientId));
     clientNome = c?.nome ?? null;
   }
-
   res.json(formatTask(task, clientNome));
 });
 

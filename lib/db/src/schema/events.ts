@@ -15,6 +15,7 @@ export const eventTypeEnum = pgEnum("event_type", [
 
 export const clientEventsTable = pgTable("client_events", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id").notNull(),
   clientId: integer("client_id").notNull().references(() => clientsTable.id),
   tipo: eventTypeEnum("tipo").notNull(),
   userId: integer("user_id").notNull().references(() => usersTable.id),

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, clientEventsTable, clientsTable, usersTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
-import { requireAuth, getCurrentUser } from "../lib/auth";
+import { eq, and, desc } from "drizzle-orm";
+import { requireAuth, getCurrentUser, requireTeam } from "../lib/auth";
 import { ListEventsQueryParams, CreateEventBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -20,18 +20,18 @@ function formatEvent(e: any, clientNome?: string | null, userNome?: string | nul
 }
 
 router.get("/events", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const qp = ListEventsQueryParams.safeParse(req.query);
   const { client_id, tipo, user_id, limit } = qp.success ? qp.data : {};
 
   const rows = await db
-    .select({
-      event: clientEventsTable,
-      clientNome: clientsTable.nome,
-      userNome: usersTable.nome,
-    })
+    .select({ event: clientEventsTable, clientNome: clientsTable.nome, userNome: usersTable.nome })
     .from(clientEventsTable)
     .leftJoin(clientsTable, eq(clientEventsTable.clientId, clientsTable.id))
     .leftJoin(usersTable, eq(clientEventsTable.userId, usersTable.id))
+    .where(eq(clientEventsTable.teamId, teamId))
     .orderBy(desc(clientEventsTable.data));
 
   let filtered = rows;
@@ -44,6 +44,9 @@ router.get("/events", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/events", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const parsed = CreateEventBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -52,6 +55,7 @@ router.post("/events", requireAuth, async (req, res): Promise<void> => {
 
   const currentUser = getCurrentUser(req);
   const [event] = await db.insert(clientEventsTable).values({
+    teamId,
     clientId: parsed.data.client_id,
     tipo: parsed.data.tipo as any,
     userId: currentUser.id,

@@ -9,10 +9,10 @@
 /**
  * @nullable
  */
-export type UserPapel = typeof UserPapel[keyof typeof UserPapel] | null;
+export type TeamRole = typeof TeamRole[keyof typeof TeamRole] | null;
 
 
-export const UserPapel = {
+export const TeamRole = {
   vendedor: 'vendedor',
   cobrador: 'cobrador',
   lider: 'lider',

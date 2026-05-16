@@ -5,11 +5,10 @@
  * Loan CRM API
  * OpenAPI spec version: 0.1.0
  */
-import type { User } from './user';
+import type { Team } from './team';
 
-export interface AuthResponse {
-  user: User;
+export interface TeamsResponse {
+  teams: Team[];
   /** @nullable */
   active_team_id?: number | null;
-  needs_team?: boolean;
 }

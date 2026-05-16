@@ -6,13 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * @nullable
- */
-export type UserPapel = typeof UserPapel[keyof typeof UserPapel] | null;
+export type UpdateTeamMemberInputRole = typeof UpdateTeamMemberInputRole[keyof typeof UpdateTeamMemberInputRole];
 
 
-export const UserPapel = {
+export const UpdateTeamMemberInputRole = {
   vendedor: 'vendedor',
   cobrador: 'cobrador',
   lider: 'lider',

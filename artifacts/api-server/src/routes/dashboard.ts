@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, clientsTable, installmentsTable, clientEventsTable, usersTable } from "@workspace/db";
+import { db, clientsTable, installmentsTable, clientEventsTable, usersTable, teamMembersTable } from "@workspace/db";
 import { eq, and, gte, lte, lt, desc } from "drizzle-orm";
-import { requireAuth, getCurrentUser } from "../lib/auth";
+import { requireAuth, getCurrentUser, requireTeam } from "../lib/auth";
 import { calculateCommission, processOverdueInstallments } from "../lib/installment-engine";
 
 const router: IRouter = Router();
@@ -37,13 +37,16 @@ function higherRisk(a: RiskLevel, b: RiskLevel): RiskLevel {
 }
 
 router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const currentUser = getCurrentUser(req);
   const { start, end } = getMonthRange();
 
   const salesRows = await db
     .select({ valorContrato: clientsTable.valorContrato })
     .from(clientsTable)
-    .where(and(eq(clientsTable.vendedorId, currentUser.id), gte(clientsTable.createdAt, start), lte(clientsTable.createdAt, end)));
+    .where(and(eq(clientsTable.teamId, teamId), eq(clientsTable.vendedorId, currentUser.id), gte(clientsTable.createdAt, start), lte(clientsTable.createdAt, end)));
 
   const totalVendasMes = salesRows.reduce((s, r) => s + parseFloat(r.valorContrato), 0);
   const { comissao, bonus } = calculateCommission(totalVendasMes);
@@ -51,37 +54,42 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const activeRows = await db
     .select({ id: clientsTable.id })
     .from(clientsTable)
-    .where(and(eq(clientsTable.vendedorId, currentUser.id), eq(clientsTable.status, "ativo")));
+    .where(and(eq(clientsTable.teamId, teamId), eq(clientsTable.vendedorId, currentUser.id), eq(clientsTable.status, "ativo")));
 
   const paidRows = await db
     .select({ id: installmentsTable.id })
     .from(installmentsTable)
     .leftJoin(clientsTable, eq(installmentsTable.clientId, clientsTable.id))
-    .where(
-      and(
-        eq(clientsTable.vendedorId, currentUser.id),
-        eq(installmentsTable.status, "pago"),
-        gte(installmentsTable.pagoEm!, start),
-        lte(installmentsTable.pagoEm!, end)
-      )
-    );
+    .where(and(
+      eq(installmentsTable.teamId, teamId),
+      eq(clientsTable.vendedorId, currentUser.id),
+      eq(installmentsTable.status, "pago"),
+      gte(installmentsTable.pagoEm!, start),
+      lte(installmentsTable.pagoEm!, end)
+    ));
 
   const overdueRows = await db
     .select({ id: installmentsTable.id })
     .from(installmentsTable)
     .leftJoin(clientsTable, eq(installmentsTable.clientId, clientsTable.id))
-    .where(and(eq(clientsTable.vendedorId, currentUser.id), eq(installmentsTable.status, "atrasado")));
+    .where(and(eq(installmentsTable.teamId, teamId), eq(clientsTable.vendedorId, currentUser.id), eq(installmentsTable.status, "atrasado")));
 
-  const allUsers = await db.select().from(usersTable);
-  const rankingData: Array<{ userId: number; totalVendas: number }> = [];
-  for (const u of allUsers) {
-    if (u.papel === "cobrador") continue;
+  // Ranking: all team members with vendedor or lider role
+  const teamMembers = await db
+    .select({ userId: teamMembersTable.userId, role: teamMembersTable.role, user: usersTable })
+    .from(teamMembersTable)
+    .leftJoin(usersTable, eq(teamMembersTable.userId, usersTable.id))
+    .where(eq(teamMembersTable.teamId, teamId));
+
+  const rankingData: Array<{ userId: number; nome: string; role: string; totalVendas: number }> = [];
+  for (const m of teamMembers) {
+    if (m.role === "cobrador" || !m.user) continue;
     const rows = await db
       .select({ valorContrato: clientsTable.valorContrato })
       .from(clientsTable)
-      .where(and(eq(clientsTable.vendedorId, u.id), gte(clientsTable.createdAt, start), lte(clientsTable.createdAt, end)));
+      .where(and(eq(clientsTable.teamId, teamId), eq(clientsTable.vendedorId, m.userId), gte(clientsTable.createdAt, start), lte(clientsTable.createdAt, end)));
     const total = rows.reduce((s, r) => s + parseFloat(r.valorContrato), 0);
-    rankingData.push({ userId: u.id, totalVendas: total });
+    rankingData.push({ userId: m.userId, nome: m.user.nome, role: m.role, totalVendas: total });
   }
   rankingData.sort((a, b) => b.totalVendas - a.totalVendas);
   const myPos = rankingData.findIndex(r => r.userId === currentUser.id);
@@ -92,9 +100,18 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     .from(clientEventsTable)
     .leftJoin(clientsTable, eq(clientEventsTable.clientId, clientsTable.id))
     .leftJoin(usersTable, eq(clientEventsTable.userId, usersTable.id))
-    .where(eq(clientEventsTable.userId, currentUser.id))
+    .where(and(eq(clientEventsTable.teamId, teamId), eq(clientEventsTable.userId, currentUser.id)))
     .orderBy(desc(clientEventsTable.data))
     .limit(10);
+
+  // Top 3 for podium
+  const podium = rankingData.slice(0, 3).map((r, i) => ({
+    posicao: i + 1,
+    user_id: r.userId,
+    nome: r.nome,
+    total_vendas: r.totalVendas,
+    ...calculateCommission(r.totalVendas),
+  }));
 
   res.json({
     comissao_mes: comissao,
@@ -104,6 +121,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     parcelas_pagas_mes: paidRows.length,
     parcelas_atrasadas: overdueRows.length,
     ranking_position: rankingPosition,
+    podium,
     recent_events: recentEvents.map(e => ({
       id: e.event.id,
       client_id: e.event.clientId,
@@ -118,19 +136,17 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 });
 
 router.get("/dashboard/cobranca", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const rows = await db
-    .select({
-      installment: installmentsTable,
-      client: clientsTable,
-      vendedorNome: usersTable.nome,
-    })
+    .select({ installment: installmentsTable, client: clientsTable, vendedorNome: usersTable.nome })
     .from(installmentsTable)
     .leftJoin(clientsTable, eq(installmentsTable.clientId, clientsTable.id))
     .leftJoin(usersTable, eq(clientsTable.vendedorId, usersTable.id))
-    .where(eq(installmentsTable.status, "atrasado"))
+    .where(and(eq(installmentsTable.teamId, teamId), eq(installmentsTable.status, "atrasado")))
     .orderBy(installmentsTable.vencimento);
 
-  // Auto-update risk levels: track max overdue days per client
   const clientMaxDays = new Map<number, number>();
   for (const r of rows) {
     if (!r.client) continue;
@@ -139,7 +155,6 @@ router.get("/dashboard/cobranca", requireAuth, async (req, res): Promise<void> =
     if (days > prev) clientMaxDays.set(r.client.id, days);
   }
 
-  // Update risk_level in DB only if auto-computed is higher
   for (const [clientId, maxDays] of clientMaxDays.entries()) {
     const autoRisk = autoRiskFromDays(maxDays);
     const row = rows.find(r => r.client?.id === clientId);
@@ -148,7 +163,6 @@ router.get("/dashboard/cobranca", requireAuth, async (req, res): Promise<void> =
     const newRisk = higherRisk(autoRisk, current as RiskLevel);
     if (newRisk !== current) {
       await db.update(clientsTable).set({ riskLevel: newRisk as any }).where(eq(clientsTable.id, clientId));
-      // Update in-memory so the response is consistent
       row.client.riskLevel = newRisk as any;
     }
   }
@@ -201,14 +215,12 @@ router.get("/dashboard/cobranca", requireAuth, async (req, res): Promise<void> =
 });
 
 router.post("/cron/process-overdue", requireAuth, async (req, res): Promise<void> => {
+  const teamId = requireTeam(req, res);
+  if (!teamId) return;
+
   const currentUser = getCurrentUser(req);
-  const result = await processOverdueInstallments(currentUser.id);
-  res.json({
-    processed: result.updated,
-    updated_installments: result.updated,
-    events_created: result.eventsCreated,
-    tasks_created: result.tasksCreated,
-  });
+  const result = await processOverdueInstallments(currentUser.id, teamId);
+  res.json({ processed: result.updated, updated_installments: result.updated, events_created: result.eventsCreated, tasks_created: result.tasksCreated });
 });
 
 export default router;

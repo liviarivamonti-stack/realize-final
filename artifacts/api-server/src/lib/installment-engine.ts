@@ -11,7 +11,6 @@ export function generateInstallmentDates(
 
   for (let i = 1; i <= parcelas; i++) {
     const d = new Date(base.getFullYear(), base.getMonth() + i, diaVencimento);
-    // If dia_vencimento > last day of month, clamp to last day
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     const day = Math.min(diaVencimento, lastDay);
     const finalDate = new Date(d.getFullYear(), d.getMonth(), day);
@@ -23,6 +22,7 @@ export function generateInstallmentDates(
 
 export async function generateInstallments(
   clientId: number,
+  teamId: number,
   valorContrato: number,
   parcelas: number,
   diaVencimento: number
@@ -31,6 +31,7 @@ export async function generateInstallments(
   const dates = generateInstallmentDates(parcelas, diaVencimento);
 
   const installmentRows = dates.map((vencimento, i) => ({
+    teamId,
     clientId,
     numeroParcela: i + 1,
     valor: valorParcela,
@@ -41,19 +42,19 @@ export async function generateInstallments(
   await db.insert(installmentsTable).values(installmentRows);
 }
 
-export async function processOverdueInstallments(userId: number): Promise<{
+export async function processOverdueInstallments(userId: number, teamId: number): Promise<{
   updated: number;
   eventsCreated: number;
   tasksCreated: number;
 }> {
   const today = new Date().toISOString().split("T")[0];
 
-  // Find all pending installments past due
   const overdue = await db
     .select()
     .from(installmentsTable)
     .where(
       and(
+        eq(installmentsTable.teamId, teamId),
         eq(installmentsTable.status, "pendente"),
         lt(installmentsTable.vencimento, today)
       )
@@ -64,15 +65,10 @@ export async function processOverdueInstallments(userId: number): Promise<{
   }
 
   const ids = overdue.map((i) => i.id);
+  await db.update(installmentsTable).set({ status: "atrasado" }).where(inArray(installmentsTable.id, ids));
 
-  // Update to atrasado
-  await db
-    .update(installmentsTable)
-    .set({ status: "atrasado" })
-    .where(inArray(installmentsTable.id, ids));
-
-  // Create events for each
   const events = overdue.map((inst) => ({
+    teamId,
     clientId: inst.clientId,
     tipo: "atraso" as const,
     userId,
@@ -81,8 +77,8 @@ export async function processOverdueInstallments(userId: number): Promise<{
   }));
   await db.insert(clientEventsTable).values(events);
 
-  // Create follow_up tasks for each
   const tasks = overdue.map((inst) => ({
+    teamId,
     userId,
     clientId: inst.clientId,
     titulo: `Follow-up: parcela ${inst.numeroParcela} em atraso`,

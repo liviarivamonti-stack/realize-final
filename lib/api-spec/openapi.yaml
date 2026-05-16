@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: auth
     description: Authentication
+  - name: teams
+    description: Team management
   - name: users
     description: User management
   - name: clients
@@ -90,6 +92,147 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           description: Not authenticated
+
+  # TEAMS
+  /teams:
+    get:
+      operationId: listTeams
+      tags: [teams]
+      summary: List teams the current user belongs to
+      responses:
+        "200":
+          description: Teams list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamsResponse"
+    post:
+      operationId: createTeam
+      tags: [teams]
+      summary: Create a new team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamInput"
+      responses:
+        "201":
+          description: Team created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+
+  /teams/join:
+    post:
+      operationId: joinTeam
+      tags: [teams]
+      summary: Join a team by invite code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinTeamInput"
+      responses:
+        "201":
+          description: Joined team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+
+  /teams/switch:
+    post:
+      operationId: switchTeam
+      tags: [teams]
+      summary: Switch active team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SwitchTeamInput"
+      responses:
+        "200":
+          description: Switched team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+
+  /teams/{id}/members:
+    get:
+      operationId: listTeamMembers
+      tags: [teams]
+      summary: List members of a team
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Members list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamMember"
+
+  /teams/{id}/members/{userId}:
+    patch:
+      operationId: updateTeamMember
+      tags: [teams]
+      summary: Update a team member's role (leader only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTeamMemberInput"
+      responses:
+        "200":
+          description: Updated member
+
+  /teams/{id}:
+    patch:
+      operationId: updateTeam
+      tags: [teams]
+      summary: Update team settings (leader only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTeamInput"
+      responses:
+        "200":
+          description: Updated team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
 
   # USERS
   /users:
@@ -791,11 +934,104 @@ components:
       properties:
         user:
           $ref: "#/components/schemas/User"
+        active_team_id:
+          type: ["integer", "null"]
+        needs_team:
+          type: boolean
+
+    # TEAMS
+    Team:
+      type: object
+      required: [id, nome, invite_code]
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        invite_code:
+          type: string
+        meta_mensal:
+          type: number
+        created_by:
+          type: integer
+        role:
+          type: ["string", "null"]
+          enum: [vendedor, cobrador, lider, null]
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+
+    TeamMember:
+      type: object
+      required: [id, user_id, nome, role]
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: ["integer", "null"]
+        nome:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [vendedor, cobrador, lider]
+        created_at:
+          type: ["string", "null"]
+
+    TeamsResponse:
+      type: object
+      required: [teams]
+      properties:
+        teams:
+          type: array
+          items:
+            $ref: "#/components/schemas/Team"
+        active_team_id:
+          type: ["integer", "null"]
+
+    TeamInput:
+      type: object
+      required: [nome]
+      properties:
+        nome:
+          type: string
+
+    JoinTeamInput:
+      type: object
+      required: [invite_code]
+      properties:
+        invite_code:
+          type: string
+
+    SwitchTeamInput:
+      type: object
+      required: [team_id]
+      properties:
+        team_id:
+          type: integer
+
+    UpdateTeamInput:
+      type: object
+      properties:
+        nome:
+          type: string
+        meta_mensal:
+          type: number
+
+    UpdateTeamMemberInput:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [vendedor, cobrador, lider]
 
     # USERS
     User:
       type: object
-      required: [id, nome, email, papel]
+      required: [id, nome, email]
       properties:
         id:
           type: integer
@@ -804,8 +1040,14 @@ components:
         email:
           type: string
         papel:
-          type: string
-          enum: [vendedor, cobrador, lider]
+          type: ["string", "null"]
+          enum: [vendedor, cobrador, lider, null]
+        active_team_id:
+          type: ["integer", "null"]
+        active_team:
+          type: ["object", "null"]
+        needs_team:
+          type: boolean
         createdAt:
           type: string
 
@@ -1112,6 +1354,25 @@ components:
           type: string
 
     # DASHBOARD
+    PodiumEntry:
+      type: object
+      required: [posicao, user_id, nome, total_vendas, comissao, bonus, total]
+      properties:
+        posicao:
+          type: integer
+        user_id:
+          type: integer
+        nome:
+          type: string
+        total_vendas:
+          type: number
+        comissao:
+          type: number
+        bonus:
+          type: number
+        total:
+          type: number
+
     DashboardSummary:
       type: object
       required: [comissao_mes, bonus, total_vendas_mes, clientes_ativos, parcelas_pagas_mes, parcelas_atrasadas, ranking_position, recent_events]
@@ -1130,6 +1391,10 @@ components:
           type: integer
         ranking_position:
           type: integer
+        podium:
+          type: array
+          items:
+            $ref: "#/components/schemas/PodiumEntry"
         recent_events:
           type: array
           items:
@@ -1232,7 +1497,7 @@ components:
     # RANKING
     RankingEntry:
       type: object
-      required: [posicao, user_id, nome, papel, total_vendas, comissao, bonus, total_comissao]
+      required: [posicao, user_id, nome, role, total_vendas, comissao, bonus, total_comissao]
       properties:
         posicao:
           type: integer
@@ -1240,8 +1505,9 @@ components:
           type: integer
         nome:
           type: string
-        papel:
+        role:
           type: string
+          enum: [vendedor, lider]
         total_vendas:
           type: number
         comissao:

@@ -14,7 +14,10 @@ export interface LoginInput {
   senha: string;
 }
 
-export type UserPapel = typeof UserPapel[keyof typeof UserPapel];
+/**
+ * @nullable
+ */
+export type UserPapel = typeof UserPapel[keyof typeof UserPapel] | null;
 
 
 export const UserPapel = {
@@ -23,16 +26,112 @@ export const UserPapel = {
   lider: 'lider',
 } as const;
 
+/**
+ * @nullable
+ */
+export type UserActiveTeam = { [key: string]: unknown } | null;
+
 export interface User {
   id: number;
   nome: string;
   email: string;
-  papel: UserPapel;
+  /** @nullable */
+  papel?: UserPapel;
+  /** @nullable */
+  active_team_id?: number | null;
+  /** @nullable */
+  active_team?: UserActiveTeam;
+  needs_team?: boolean;
   createdAt?: string;
 }
 
 export interface AuthResponse {
   user: User;
+  /** @nullable */
+  active_team_id?: number | null;
+  needs_team?: boolean;
+}
+
+/**
+ * @nullable
+ */
+export type TeamRole = typeof TeamRole[keyof typeof TeamRole] | null;
+
+
+export const TeamRole = {
+  vendedor: 'vendedor',
+  cobrador: 'cobrador',
+  lider: 'lider',
+} as const;
+
+export interface Team {
+  id: number;
+  nome: string;
+  invite_code: string;
+  meta_mensal?: number;
+  created_by?: number;
+  /** @nullable */
+  role?: TeamRole;
+  is_active?: boolean;
+  created_at?: string;
+}
+
+export type TeamMemberRole = typeof TeamMemberRole[keyof typeof TeamMemberRole];
+
+
+export const TeamMemberRole = {
+  vendedor: 'vendedor',
+  cobrador: 'cobrador',
+  lider: 'lider',
+} as const;
+
+export interface TeamMember {
+  id: number;
+  /** @nullable */
+  user_id: number | null;
+  /** @nullable */
+  nome: string | null;
+  /** @nullable */
+  email?: string | null;
+  role: TeamMemberRole;
+  /** @nullable */
+  created_at?: string | null;
+}
+
+export interface TeamsResponse {
+  teams: Team[];
+  /** @nullable */
+  active_team_id?: number | null;
+}
+
+export interface TeamInput {
+  nome: string;
+}
+
+export interface JoinTeamInput {
+  invite_code: string;
+}
+
+export interface SwitchTeamInput {
+  team_id: number;
+}
+
+export interface UpdateTeamInput {
+  nome?: string;
+  meta_mensal?: number;
+}
+
+export type UpdateTeamMemberInputRole = typeof UpdateTeamMemberInputRole[keyof typeof UpdateTeamMemberInputRole];
+
+
+export const UpdateTeamMemberInputRole = {
+  vendedor: 'vendedor',
+  cobrador: 'cobrador',
+  lider: 'lider',
+} as const;
+
+export interface UpdateTeamMemberInput {
+  role: UpdateTeamMemberInputRole;
 }
 
 export type UserInputPapel = typeof UserInputPapel[keyof typeof UserInputPapel];
@@ -351,6 +450,16 @@ export interface NoteUpdate {
   texto?: string;
 }
 
+export interface PodiumEntry {
+  posicao: number;
+  user_id: number;
+  nome: string;
+  total_vendas: number;
+  comissao: number;
+  bonus: number;
+  total: number;
+}
+
 export interface DashboardSummary {
   comissao_mes: number;
   bonus: number;
@@ -359,6 +468,7 @@ export interface DashboardSummary {
   parcelas_pagas_mes: number;
   parcelas_atrasadas: number;
   ranking_position: number;
+  podium?: PodiumEntry[];
   recent_events: ClientEvent[];
 }
 
@@ -450,11 +560,19 @@ export interface Notification {
   createdAt: string;
 }
 
+export type RankingEntryRole = typeof RankingEntryRole[keyof typeof RankingEntryRole];
+
+
+export const RankingEntryRole = {
+  vendedor: 'vendedor',
+  lider: 'lider',
+} as const;
+
 export interface RankingEntry {
   posicao: number;
   user_id: number;
   nome: string;
-  papel: string;
+  role: RankingEntryRole;
   total_vendas: number;
   comissao: number;
   bonus: number;

@@ -5,12 +5,19 @@
  * Loan CRM API
  * OpenAPI spec version: 0.1.0
  */
+import type { UserActiveTeam } from './userActiveTeam';
 import type { UserPapel } from './userPapel';
 
 export interface User {
   id: number;
   nome: string;
   email: string;
-  papel: UserPapel;
+  /** @nullable */
+  papel?: UserPapel;
+  /** @nullable */
+  active_team_id?: number | null;
+  /** @nullable */
+  active_team?: UserActiveTeam;
+  needs_team?: boolean;
   createdAt?: string;
 }

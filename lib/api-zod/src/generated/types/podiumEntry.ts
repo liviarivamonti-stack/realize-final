@@ -5,15 +5,13 @@
  * Loan CRM API
  * OpenAPI spec version: 0.1.0
  */
-import type { RankingEntryRole } from './rankingEntryRole';
 
-export interface RankingEntry {
+export interface PodiumEntry {
   posicao: number;
   user_id: number;
   nome: string;
-  role: RankingEntryRole;
   total_vendas: number;
   comissao: number;
   bonus: number;
-  total_comissao: number;
+  total: number;
 }

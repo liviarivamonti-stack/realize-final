@@ -15,6 +15,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
 
 export const notificationsTable = pgTable("notifications", {
   id: serial("id").primaryKey(),
+  teamId: integer("team_id").notNull(),
   userId: integer("user_id").notNull().references(() => usersTable.id),
   tipo: notificationTypeEnum("tipo").notNull(),
   titulo: text("titulo").notNull(),

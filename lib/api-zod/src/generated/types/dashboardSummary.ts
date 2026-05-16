@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ClientEvent } from './clientEvent';
+import type { PodiumEntry } from './podiumEntry';
 
 export interface DashboardSummary {
   comissao_mes: number;
@@ -15,5 +16,6 @@ export interface DashboardSummary {
   parcelas_pagas_mes: number;
   parcelas_atrasadas: number;
   ranking_position: number;
+  podium?: PodiumEntry[];
   recent_events: ClientEvent[];
 }
