@@ -3,16 +3,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/artifacts/api-server/src/index.ts"
+      "destination": "/api/index.ts"
     },
     {
       "source": "/(.*)",
       "destination": "/artifacts/crm/dist/public/$1"
     }
-  ],
-  "functions": {
-    "artifacts/api-server/src/index.ts": {
-      "runtime": "@vercel/node"
-    }
-  }
+  ]
 }
