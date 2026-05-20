@@ -2,8 +2,10 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
-import router from "./routes";
-import { logger } from "./lib/logger";
+// @ts-ignore
+import router from "./routes.js";
+// @ts-ignore
+import { logger } from "./lib/logger.js";
 
 const app = express();
 
