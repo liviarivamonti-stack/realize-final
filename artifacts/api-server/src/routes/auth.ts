@@ -12,10 +12,11 @@ function generateInviteCode(): string {
 }
 
 function cookieOpts() {
+  const isProd = process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
+    secure: isProd,
+    sameSite: (isProd ? "none" : "lax") as const,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   };
 }
@@ -114,7 +115,7 @@ router.post("/auth/logout", async (req, res): Promise<void> => {
   if (token) {
     await db.delete(sessionsTable).where(eq(sessionsTable.token, token));
   }
-  res.clearCookie("session_token");
+  res.clearCookie("session_token", cookieOpts());
   res.json({ ok: true });
 });
 
