@@ -2,12 +2,18 @@ import psycopg2
 import time
 
 # Usando a URL do Pooler que o usuário forneceu
-db_url = "postgresql://postgres.hcolufjlzcrnppvlihvs:12DEJUNHO123@aws-1-us-east-1.pooler.supabase.com:6543/postgres"
+db_url = "postgresql://postgres.hcolufjlzcrnppvlihvs:%2512DEJUNHO123@aws-1-us-east-1.pooler.supabase.com:6543/postgres"
 
 def setup():
     try:
         print("Conectando ao Supabase...")
-        conn = psycopg2.connect(db_url)
+        conn = psycopg2.connect(
+            host="aws-1-us-east-1.pooler.supabase.com",
+            port=6543,
+            user="postgres.hcolufjlzcrnppvlihvs",
+            password="%12DEJUNHO123",
+            database="postgres"
+        )
         conn.autocommit = True
         cur = conn.cursor()
         
