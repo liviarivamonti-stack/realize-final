@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, usersTable, sessionsTable, teamsTable, teamMembersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { hashPassword, createSession, requireAuth, getCurrentUser, getCurrentSession } from "../lib/auth";
+import { hashPassword, createSession, requireAuth, getCurrentUser, getCurrentSession } from "../lib/auth.ts";
 import { LoginBody } from "@workspace/api-zod";
 import crypto from "crypto";
 

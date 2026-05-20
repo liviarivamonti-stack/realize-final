@@ -2,6 +2,7 @@
   "name": "workspace",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "pnpm --filter @workspace/crm build",
     "vercel-build": "pnpm --filter @workspace/crm build"
