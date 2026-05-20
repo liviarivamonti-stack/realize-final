@@ -80,12 +80,10 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   }
 
   const senhaHash = hashPassword(senha);
-  console.log("Tentando inserir usuário:", { nome, email });
   const [user] = await db
     .insert(usersTable)
     .values({ nome: nome.trim(), email, senhaHash })
     .returning();
-  console.log("Usuário inserido com sucesso:", user.id);
 
   // Auto-create team for this user
   const teamNome = `Time de ${nome.trim().split(" ")[0]}`;

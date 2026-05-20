@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "pnpm --filter @workspace/crm build"
+    "build": "pnpm --filter @workspace/crm build",
+    "vercel-build": "pnpm --filter @workspace/crm build"
   }
 }

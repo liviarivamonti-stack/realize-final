@@ -6,8 +6,12 @@
       "destination": "/api/index"
     },
     {
-      "source": "/(.*)",
-      "destination": "/artifacts/crm/dist/public/$1"
+      "source": "/assets/(.*)",
+      "destination": "/artifacts/crm/dist/public/assets/$1"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/artifacts/crm/dist/public/index.html"
     }
   ],
   "functions": {
