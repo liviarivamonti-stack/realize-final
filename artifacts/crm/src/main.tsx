@@ -13,9 +13,9 @@ if ('serviceWorker' in navigator) {
 
 import { setBaseUrl } from "@workspace/api-client-react";
 
-const apiUrl = import.meta.env.VITE_API_URL;
-if (apiUrl) {
-  setBaseUrl(apiUrl);
+// No Vercel Serverless, usamos caminhos relativos por padrão
+if (import.meta.env.VITE_API_URL) {
+  setBaseUrl(import.meta.env.VITE_API_URL);
 }
 
 createRoot(document.getElementById('root')!).render(
