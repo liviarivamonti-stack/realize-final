@@ -12,7 +12,7 @@
   ],
   "functions": {
     "artifacts/api-server/src/index.ts": {
-      "runtime": "vercel-node@latest"
+      "runtime": "@vercel/node"
     }
   }
 }
