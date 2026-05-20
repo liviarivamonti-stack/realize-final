@@ -1,33 +1,9 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import pinoHttp from "pino-http";
 import router from "./routes";
-import { logger } from "./lib/logger";
 
 const app = express();
-
-const pinoMiddleware: any = (pinoHttp as any).default || pinoHttp;
-
-app.use(
-  pinoMiddleware({
-    logger,
-    serializers: {
-      req: (req: any) => {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
-      },
-      res: (res: any) => {
-        return {
-          statusCode: res.statusCode,
-        };
-      },
-    },
-  })
-);
 
 const allowedOrigins = [
   process.env.FRONTEND_URL,
