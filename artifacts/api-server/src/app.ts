@@ -7,24 +7,27 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// Fix for "This expression is not callable" and implicit any types
+const pinoMiddleware: any = (pinoHttp as any).default || pinoHttp;
+
 app.use(
-  pinoHttp({
+  pinoMiddleware({
     logger,
     serializers: {
-      req(req) {
+      req: (req: any) => {
         return {
           id: req.id,
           method: req.method,
           url: req.url?.split("?")[0],
         };
       },
-      res(res) {
+      res: (res: any) => {
         return {
           statusCode: res.statusCode,
         };
       },
     },
-  }),
+  })
 );
 
 app.use(cors({
