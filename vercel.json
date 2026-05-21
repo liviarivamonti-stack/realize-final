@@ -1,7 +1,9 @@
 {
   "version": 2,
+  "installCommand": "npm install --prefix api && pnpm --filter @workspace/crm build",
+  "buildCommand": "pnpm --filter @workspace/crm build",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/(.*)", "destination": "/artifacts/crm/dist/$1" }
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/((?!api/).*)", "destination": "/artifacts/crm/dist/public/index.html" }
   ]
 }
