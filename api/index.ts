@@ -2,53 +2,9 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
-import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { pgTable, text, serial, timestamp, integer, pgEnum } from "drizzle-orm/pg-core";
-import { eq, and } from "drizzle-orm";
 
 const { Pool } = pg;
-
-// Schema Definition (Consolidated to avoid ERR_MODULE_NOT_FOUND)
-export const papelEnum = pgEnum("papel", ["vendedor", "cobrador", "lider"]);
-export const teamRoleEnum = pgEnum("team_role", ["vendedor", "cobrador", "lider"]);
-
-export const usersTable = pgTable("users", {
-  id: serial("id").primaryKey(),
-  nome: text("nome").notNull(),
-  email: text("email").notNull().unique(),
-  senhaHash: text("senha_hash").notNull(),
-  papel: papelEnum("papel").notNull().default("vendedor"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const teamsTable = pgTable("teams", {
-  id: serial("id").primaryKey(),
-  nome: text("nome").notNull(),
-  createdBy: integer("created_by").notNull(),
-  inviteCode: text("invite_code").notNull().unique(),
-  metaMensal: text("meta_mensal").notNull().default("20000"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const teamMembersTable = pgTable("team_members", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  teamId: integer("team_id").notNull(),
-  role: teamRoleEnum("role").notNull().default("vendedor"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const sessionsTable = pgTable("sessions", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  activeTeamId: integer("active_team_id"),
-  token: text("token").notNull().unique(),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
 
 // DB Connection
 if (!process.env.DATABASE_URL) {
@@ -59,8 +15,6 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
-
-const db = drizzle(pool);
 
 // Express App
 const app = express();
@@ -77,13 +31,6 @@ app.use(express.urlencoded({ extended: true }));
 // Auth Helpers
 function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password + "loan_crm_salt").digest("hex");
-}
-
-async function createSession(userId: number, activeTeamId?: number | null): Promise<string> {
-  const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  await db.insert(sessionsTable).values({ userId, activeTeamId: activeTeamId ?? null, token, expiresAt });
-  return token;
 }
 
 function generateInviteCode(): string {
@@ -106,18 +53,22 @@ app.get("/api/auth/me", async (req, res) => {
     const token = req.cookies?.session_token;
     if (!token) return res.status(401).json({ error: "Not authenticated" });
 
-    const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.token, token));
-    if (!session || session.expiresAt < new Date()) return res.status(401).json({ error: "Session expired" });
+    const client = await pool.connect();
+    try {
+      const sessionRes = await client.query("SELECT * FROM sessions WHERE token = $1 AND expires_at > NOW()", [token]);
+      if (sessionRes.rows.length === 0) return res.status(401).json({ error: "Session expired" });
+      
+      const session = sessionRes.rows[0];
+      const userRes = await client.query("SELECT id, nome, email FROM users WHERE id = $1", [session.user_id]);
+      if (userRes.rows.length === 0) return res.status(401).json({ error: "User not found" });
 
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, session.userId));
-    if (!user) return res.status(401).json({ error: "User not found" });
-
-    res.json({
-      id: user.id,
-      nome: user.nome,
-      email: user.email,
-      active_team_id: session.activeTeamId ?? null,
-    });
+      res.json({
+        ...userRes.rows[0],
+        active_team_id: session.active_team_id,
+      });
+    } finally {
+      client.release();
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -129,14 +80,27 @@ app.post("/api/auth/login", async (req, res) => {
     const { email, senha } = req.body;
     if (!email || !senha) return res.status(400).json({ error: "Email e senha são obrigatórios" });
 
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
-    if (!user || user.senhaHash !== hashPassword(senha)) return res.status(401).json({ error: "Email ou senha inválidos" });
+    const client = await pool.connect();
+    try {
+      const userRes = await client.query("SELECT * FROM users WHERE email = $1", [email]);
+      const user = userRes.rows[0];
 
-    const [membership] = await db.select().from(teamMembersTable).where(eq(teamMembersTable.userId, user.id));
-    const token = await createSession(user.id, membership?.teamId);
+      if (!user || user.senha_hash !== hashPassword(senha)) {
+        return res.status(401).json({ error: "Email ou senha inválidos" });
+      }
 
-    res.cookie("session_token", token, cookieOpts());
-    res.json({ user: { id: user.id, nome: user.nome, email: user.email }, active_team_id: membership?.teamId });
+      const memberRes = await client.query("SELECT team_id FROM team_members WHERE user_id = $1 LIMIT 1", [user.id]);
+      const activeTeamId = memberRes.rows[0]?.team_id || null;
+
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await client.query("INSERT INTO sessions (user_id, active_team_id, token, expires_at) VALUES ($1, $2, $3, $4)", [user.id, activeTeamId, token, expiresAt]);
+
+      res.cookie("session_token", token, cookieOpts());
+      res.json({ user: { id: user.id, nome: user.nome, email: user.email }, active_team_id: activeTeamId });
+    } finally {
+      client.release();
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -148,16 +112,34 @@ app.post("/api/auth/register", async (req, res) => {
     const { nome, email, senha } = req.body ?? {};
     if (!nome || !email || !senha) return res.status(400).json({ error: "Dados incompletos" });
 
-    const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
-    if (existing) return res.status(409).json({ error: "Email já cadastrado" });
+    const client = await pool.connect();
+    try {
+      const existingRes = await client.query("SELECT id FROM users WHERE email = $1", [email]);
+      if (existingRes.rows.length > 0) return res.status(409).json({ error: "Email já cadastrado" });
 
-    const [user] = await db.insert(usersTable).values({ nome, email, senhaHash: hashPassword(senha) }).returning();
-    const [team] = await db.insert(teamsTable).values({ nome: `Time de ${nome}`, createdBy: user.id, inviteCode: generateInviteCode() }).returning();
-    await db.insert(teamMembersTable).values({ userId: user.id, teamId: team.id, role: "lider" });
+      const userRes = await client.query(
+        "INSERT INTO users (nome, email, senha_hash) VALUES ($1, $2, $3) RETURNING id, nome, email",
+        [nome, email, hashPassword(senha)]
+      );
+      const user = userRes.rows[0];
 
-    const token = await createSession(user.id, team.id);
-    res.cookie("session_token", token, cookieOpts());
-    res.status(201).json({ user: { id: user.id, nome: user.nome, email: user.email }, team: { id: team.id, nome: team.nome } });
+      const teamRes = await client.query(
+        "INSERT INTO teams (nome, created_by, invite_code) VALUES ($1, $2, $3) RETURNING id, nome",
+        [`Time de ${nome}`, user.id, generateInviteCode()]
+      );
+      const team = teamRes.rows[0];
+
+      await client.query("INSERT INTO team_members (user_id, team_id, role) VALUES ($1, $2, $3)", [user.id, team.id, 'lider']);
+
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await client.query("INSERT INTO sessions (user_id, active_team_id, token, expires_at) VALUES ($1, $2, $3, $4)", [user.id, team.id, token, expiresAt]);
+
+      res.cookie("session_token", token, cookieOpts());
+      res.status(201).json({ user, team });
+    } finally {
+      client.release();
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
