@@ -16,7 +16,7 @@
   ],
   "functions": {
     "api/index.ts": {
-      "includeFiles": "artifacts/api-server/src/**,lib/db/src/**"
+      "includeFiles": "lib/db/src/**,artifacts/api-server/src/**"
     }
   }
 }

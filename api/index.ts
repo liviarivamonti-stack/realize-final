@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
-import { db, usersTable, sessionsTable, teamsTable, teamMembersTable } from "./../lib/db/src/index.ts";
+import { db, usersTable, sessionsTable, teamsTable, teamMembersTable } from "../lib/db/src/index.ts";
 import { eq, and } from "drizzle-orm";
 
 const app = express();
