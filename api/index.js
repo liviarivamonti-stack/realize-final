@@ -49,4 +49,35 @@ module.exports = async (req, res) => {
       const activeTeamId = m.rows[0]?.team_id || null;
       const token = crypto.randomBytes(32).toString("hex");
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await client.query("INSERT INTO sessions (user_id, active_team_id, token, expires_at
+      
+      // CORREÇÃO DA LINHA 52:
+      await client.query(
+        "INSERT INTO sessions (user_id, active_team_id, token, expires_at) VALUES ($1, $2, $3, $4)",
+        [user.id, activeTeamId, token, expiresAt]
+      );
+
+      res.setHeader("Set-Cookie", `session_token=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`);
+      return res.status(200).json({ success: true, user: { id: user.id, nome: user.nome, email: user.email }, active_team_id: activeTeamId });
+    } finally { client.release(); }
+  }
+
+  // POST /api/auth/register
+  if (url.includes("/auth/register") && req.method === "POST") {
+    const { nome, email, senha } = req.body || {};
+    if (!nome || !email || !senha) return res.status(400).json({ error: "Todos os campos são obrigatórios" });
+    const client = await pool.connect();
+    try {
+      const check = await client.query("SELECT id FROM users WHERE email=$1", [email]);
+      if (check.rows[0]) return res.status(400).json({ error: "Email já cadastrado" });
+      
+      const newUser = await client.query(
+        "INSERT INTO users (nome, email, senha_hash) VALUES ($1, $2, $3) RETURNING id, nome, email",
+        [nome, email, hashPassword(senha)]
+      );
+      
+      return res.status(201).json({ success: true, user: newUser.rows[0] });
+    } finally { client.release(); }
+  }
+
+  return res.status(404).json({ error: "Route not found" });
+};
