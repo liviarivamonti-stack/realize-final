@@ -1,10 +1,11 @@
 const { Pool } = require("pg");
 const crypto = require("crypto");
 
+// Configuração do Banco de Dados
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  connectionTimeoutMillis: 5000 // Desiste após 5 segundos se não conectar
+  connectionTimeoutMillis: 10000 // 10 segundos de timeout
 });
 
 function hashPassword(password) {
@@ -20,20 +21,32 @@ module.exports = async (req, res) => {
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  console.log(`Recebendo requisição: ${req.method} ${req.url}`);
-
   const url = req.url || "";
   let client;
 
   try {
-    // POST /api/auth/register
+    // 1. ROTA: GET /api/auth/me (Verificar usuário logado)
+    if (url.includes("/auth/me") && req.method === "GET") {
+      const cookie = req.headers.cookie || "";
+      const match = cookie.match(/session_token=([^;]+)/);
+      const token = match ? match[1] : null;
+      
+      if (!token) return res.status(401).json({ error: "Não autenticado" });
+      
+      client = await pool.connect();
+      const s = await client.query("SELECT * FROM sessions WHERE token=$1 AND expires_at > NOW()", [token]);
+      if (!s.rows[0]) return res.status(401).json({ error: "Sessão expirada" });
+      
+      const u = await client.query("SELECT id, nome, email FROM users WHERE id=$1", [s.rows[0].user_id]);
+      return res.status(200).json({ ...u.rows[0], active_team_id: s.rows[0].active_team_id });
+    }
+
+    // 2. ROTA: POST /api/auth/register (Criar conta)
     if (url.includes("/auth/register") && req.method === "POST") {
       const { nome, email, senha } = req.body || {};
       if (!nome || !email || !senha) return res.status(400).json({ error: "Campos obrigatórios faltando" });
 
-      console.log("Tentando conectar ao banco para registro...");
       client = await pool.connect();
-      
       const check = await client.query("SELECT id FROM users WHERE email=$1", [email]);
       if (check.rows[0]) return res.status(400).json({ error: "Email já cadastrado" });
       
@@ -42,19 +55,20 @@ module.exports = async (req, res) => {
         [nome, email, hashPassword(senha)]
       );
       
-      console.log("Usuário criado com sucesso!");
       return res.status(201).json({ success: true, user: newUser.rows[0] });
     }
 
-    // POST /api/auth/login
+    // 3. ROTA: POST /api/auth/login (Entrar)
     if (url.includes("/auth/login") && req.method === "POST") {
       const { email, senha } = req.body || {};
+      if (!email || !senha) return res.status(400).json({ error: "Email e senha obrigatórios" });
+
       client = await pool.connect();
       const u = await client.query("SELECT * FROM users WHERE email=$1", [email]);
       const user = u.rows[0];
       
       if (!user || user.senha_hash !== hashPassword(senha)) {
-        return res.status(401).json({ error: "Credenciais inválidas" });
+        return res.status(401).json({ error: "E-mail ou senha incorretos" });
       }
 
       const token = crypto.randomBytes(32).toString("hex");
@@ -65,15 +79,15 @@ module.exports = async (req, res) => {
         [user.id, token, expiresAt]
       );
 
-      res.setHeader("Set-Cookie", `session_token=${token}; Path=/; HttpOnly; Max-Age=${7 * 24 * 60 * 60}`);
-      return res.status(200).json({ success: true, user: { id: user.id, email: user.email } });
+      res.setHeader("Set-Cookie", `session_token=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`);
+      return res.status(200).json({ success: true, user: { id: user.id, nome: user.nome, email: user.email } });
     }
 
     return res.status(404).json({ error: "Rota não encontrada" });
 
   } catch (error) {
-    console.error("ERRO NA API:", error.message);
-    return res.status(500).json({ error: "Erro interno no servidor", details: error.message });
+    console.error("ERRO:", error.message);
+    return res.status(500).json({ error: "Erro no servidor", details: error.message });
   } finally {
     if (client) client.release();
   }
